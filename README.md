@@ -118,6 +118,6 @@ python src/main.py
 ---
 
 ## Author
-Developed by [Your Name].
+Developed by Dhruv Khatter.
 
-For questions, contact [your.email@example.com].
+For questions, contact dhruvkhatter2003@gmail.com.
