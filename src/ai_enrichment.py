@@ -1,29 +1,27 @@
-# src/ai_enrichment.py
 from transformers import pipeline
+import torch
+CONFIDENCE_THRESHOLD = 0.7
 
 def enrich_data(content, query):
     if not content or not query:
-        return "No"
+        return "NO"
     
-    qa_pipeline = pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
+    classifier = pipeline(
+        "zero-shot-classification",
+        model="facebook/bart-large-mnli",
+        device=0 if torch.cuda.is_available() else -1
+    )
     
-    result = qa_pipeline({
-        "question": query,
-        "context": content
-    })
+    candidate_labels = ["yes", "no"]
     
-    print(f"Query: {query}, Answer: {result['answer']}, Score: {result['score']}")
+    sequence_to_classify = f"Question: {query}\nContext: {content[:1000]}"  # Limit context
     
-    score = result["score"]
-    answer = result["answer"].lower()
-    
-    query_keywords = query.lower().split()
-    content_lower = content.lower()
-    relevant_keywords = [kw for kw in query_keywords if kw in content_lower]
-    
-    if score > 0.3 and len(relevant_keywords) > 0:
-        print(f"Determined 'Yes' for query '{query}' based on score {score} and keywords {relevant_keywords}")
-        return "Yes"
-    else:
-        print(f"Determined 'No' for query '{query}' based on score {score} and lack of relevant keywords")
-        return "No"
+    try:
+        result = classifier(sequence_to_classify, candidate_labels)
+        
+        if result['scores'][0] > CONFIDENCE_THRESHOLD:
+            return "YES" if result['labels'][0] == "yes" else "NO"
+        return "NO"
+    except Exception as e:
+        print(f"Classification error: {e}")
+        return "NO"
