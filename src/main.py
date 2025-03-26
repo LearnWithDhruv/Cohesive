@@ -1,54 +1,30 @@
-from scraper import scrape_website
-from ai_enrichment import enrich_data
-from contact_validator import extract_and_validate_contacts
-from sheets_integration import read_sheet, write_sheet
-import time
+from bs4 import BeautifulSoup
+import requests
+import re
 
-def process_row(url, query):
-    print(f"\nProcessing: {url}")
-    print(f"Query: {query}")
-    
-    content = None
-    for _ in range(2):  
-        content = scrape_website(url)
-        if content:
-            break
-        time.sleep(1)
-    
-    if not content:
-        print("! Failed to scrape content")
-        return [url, query, "NO", "N/A", "N/A"]
-    
-    print(f"Scraped content length: {len(content)} chars")
-    
-    answer = enrich_data(content, query)
-    
-    emails, phones = [], []
+def scrape_website(url):
     try:
-        emails, phones = extract_and_validate_contacts(content)
-        print(f"Found {len(emails)} email(s) and {len(phones)} phone(s)")
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        contact_selectors = [
+            'footer', '.contact', '#contact', '.footer',
+            '.email', '#email', 'address', '.address'
+        ]
+        
+        contact_content = []
+        for selector in contact_selectors:
+            contact_content.extend([el.get_text() for el in soup.select(selector)])
+        
+        main_content = " ".join([t for t in soup.stripped_strings])
+        prioritized_content = " ".join(contact_content) + " " + main_content
+        
+        return prioritized_content
     except Exception as e:
-        print(f"Contact extraction error: {e}")
-    
-    return [
-        url,
-        query,
-        answer,
-        ", ".join(emails) if emails else "N/A",
-        ", ".join(phones) if phones else "N/A"
-    ]
-
-def main():
-    sheet_data = read_sheet()
-    results = []
-    
-    for row in sheet_data:
-        if len(row) >= 2:
-            result = process_row(row[0], row[1])
-            results.append(result)
-            time.sleep(1)  
-    
-    write_sheet(results)
-
-if __name__ == "__main__":
-    main()
+        print(f"Error scraping {url}: {e}")
+        return None
